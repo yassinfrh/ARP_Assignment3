@@ -6,6 +6,7 @@
 #include <semaphore.h>
 #include <fcntl.h>
 #include <string.h>
+#include <arpa/inet.h>
 
 #define SEM_PATH "/sem_SHARED_IMAGE"
 
@@ -59,7 +60,113 @@ int main()
     return 1;
   }
 
-  char *arg_list_A[] = {"/usr/bin/konsole", "-e", "./bin/processA", NULL};
+  // Variable to store the user's choice
+  char choice[20];
+  int modality;
+
+  do
+  {
+    /// Ask the user if they which modality to launch the program
+    printf("Which modality do you want to launch the program in (insert the number)?\n");
+    printf("1. Normal\n");
+    printf("2. Server\n");
+    printf("3. Client\n");
+
+    // Read the user's choice as a string
+    scanf("%s", choice);
+
+    // Convert the user's choice to an integer
+    modality = atoi(choice);
+
+    // Check if the user's choice is valid
+    if (modality == 1 || modality == 2 || modality == 3)
+    {
+      break;
+    }
+    else
+    {
+      printf("Invalid choice. Please try again.\n");
+    }
+  } while (1);
+
+  // Store the modality in a string to pass it to the child process
+  char modality_str[2];
+  sprintf(modality_str, "%d", modality);
+
+  // Variable to store the port number
+  char port_str[6];
+  // Variable to store the IP address
+  char ip_str[16];
+
+  // If the user chose to launch the program in server mode, ask the user to insert the port number
+  if (modality == 2)
+  {
+    char port[20];
+    do
+    {
+      printf("Insert the port number (between 1024 and 65535): ");
+      scanf("%s", port);
+
+      // Check if the port number is valid
+      if (atoi(port) >= 1024 && atoi(port) <= 65535)
+      {
+        break;
+      }
+      else
+      {
+        printf("Invalid port number. Please try again.\n");
+      }
+    } while (1);
+
+    // Store the port number in a string to pass it to the child process
+    sprintf(port_str, "%d", atoi(port));
+  }
+  // If the user chose to launch the program in client mode, ask the user to insert the IP and the port
+  else if (modality == 3)
+  {
+    char ip[16];
+    do
+    {
+      printf("Insert the IP address: ");
+      scanf("%s", ip);
+
+      // Check if the IP address is valid
+      if (strcmp(ip, "localhost") == 0 || inet_addr(ip) != -1)
+      {
+        break;
+      }
+      else
+      {
+        printf("Invalid IP address. Please try again.\n");
+      }
+    } while (1);
+
+    // Store the IP address in a string to pass it to the child process
+    sprintf(ip_str, "%s", ip);
+
+    char port[20];
+    do
+    {
+      printf("Insert the port number (between 1024 and 65535): ");
+      scanf("%s", port);
+
+      // Check if the port number is valid
+      if (atoi(port) >= 1024 && atoi(port) <= 65535)
+      {
+        break;
+      }
+      else
+      {
+        printf("Invalid port number. Please try again.\n");
+      }
+    } while (1);
+
+    // Store the port number in a string to pass it to the child process
+    sprintf(port_str, "%d", atoi(port));
+  }
+
+  // Create the argument list for the child processes
+  char *arg_list_A[] = {"/usr/bin/konsole", "-e", "./bin/processA", modality_str, port_str, ip_str, NULL};
   char *arg_list_B[] = {"/usr/bin/konsole", "-e", "./bin/processB", NULL};
 
   pid_t pid_procA = spawn("/usr/bin/konsole", arg_list_A);

@@ -78,7 +78,10 @@ void bmp_to_static(bmpfile_t *bmp, rgb_pixel_t *matrix)
 }
 
 int main(int argc, char *argv[])
-{
+{    
+    // Get the modality of the program from the arguments
+    int modality = atoi(argv[1]);
+    
     // Data structure for storing the bitmap file
     bmpfile_t *bmp;
 
