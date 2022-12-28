@@ -211,6 +211,7 @@ int main()
   {
     // If the status is greater than 1, the child process exited because of a system call error
     printf("Child process exited for system call error: %s", strerror(WEXITSTATUS(status)));
+    fflush(stdout);
   }
 
   // Unlink the semaphore
