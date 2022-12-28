@@ -88,7 +88,6 @@ void bmp_to_static(bmpfile_t *bmp, rgb_pixel_t *matrix)
 
 int main(int argc, char *argv[])
 {
-    exit(1);
     // Get the modality of the program from the arguments
     int modality = atoi(argv[1]);
 
