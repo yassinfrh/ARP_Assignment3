@@ -5,6 +5,15 @@
 #include <sys/mman.h>
 #include <semaphore.h>
 #include <errno.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <stdlib.h>
+#include <strings.h>
+#include <string.h>
+#include <unistd.h>
 
 #define SEM_PATH "/sem_SHARED_IMAGE"
 
@@ -78,10 +87,11 @@ void bmp_to_static(bmpfile_t *bmp, rgb_pixel_t *matrix)
 }
 
 int main(int argc, char *argv[])
-{    
+{
+    exit(1);
     // Get the modality of the program from the arguments
     int modality = atoi(argv[1]);
-    
+
     // Data structure for storing the bitmap file
     bmpfile_t *bmp;
 
@@ -179,6 +189,85 @@ int main(int argc, char *argv[])
         goto cleanup;
     }
 
+    // Variables for socket communication
+    int sockfd, newsockfd, portno, clilen, n;
+    struct sockaddr_in serv_addr, cli_addr;
+    struct hostent *server;
+
+    // If the modality is server
+    if (modality == 2)
+    {
+        // Create a socket
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd < 0)
+        {
+            error = TRUE;
+            goto cleanup;
+        }
+
+        // Initialize socket structure
+        bzero((char *)&serv_addr, sizeof(serv_addr));
+        portno = atoi(argv[2]);
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_addr.s_addr = INADDR_ANY;
+        serv_addr.sin_port = htons(portno);
+
+        // Bind the host address
+        if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+        {
+            error = TRUE;
+            goto cleanup;
+        }
+
+        // Start listening for the client
+        listen(sockfd, 5);
+        clilen = sizeof(cli_addr);
+
+        // Accept connection from the client
+        newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+        if (newsockfd < 0)
+        {
+            error = TRUE;
+            goto cleanup;
+        }
+    }
+    // If modality is client
+    else if (modality == 3)
+    {
+        // Create a socket
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd < 0)
+        {
+            error = TRUE;
+            goto cleanup;
+        }
+
+        // Get the host name
+        server = gethostbyname(argv[3]);
+        if (server == NULL)
+        {
+            error = TRUE;
+            goto cleanup;
+        }
+
+        // Initialize socket structure
+        bzero((char *)&serv_addr, sizeof(serv_addr));
+        portno = atoi(argv[2]);
+        serv_addr.sin_family = AF_INET;
+        bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+        serv_addr.sin_port = htons(portno);
+
+        // Connect to the server
+        if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+        {
+            error = TRUE;
+            goto cleanup;
+        }
+    }
+
+    // Variable to store the key to send or received
+    char key[4];
+
     // Infinite loop
     while (TRUE)
     {
@@ -198,12 +287,70 @@ int main(int argc, char *argv[])
             }
         }
 
-        // Else, if user presses print button...
-        else if (cmd == KEY_MOUSE)
+        // If the modality is server
+        if (modality == 2)
         {
-            if (getmouse(&event) == OK)
+            // Initialize the select function variables
+            fd_set readfds;
+            FD_ZERO(&readfds);
+            FD_SET(newsockfd, &readfds);
+            int maxfd = newsockfd + 1;
+            struct timeval timeout = {0, 1000};
+
+            // Wait for the client to send a byte
+            int ready = select(maxfd, &readfds, NULL, NULL, &timeout);
+
+            // If error occurred
+            if (ready == -1)
             {
-                if (check_button_pressed(print_btn, &event))
+                error = TRUE;
+                break;
+            }
+            // If the client sent a byte
+            else if (ready > 0)
+            {
+                // Read the byte
+                if (read(newsockfd, &key, 4) < 0)
+                {
+                    error = TRUE;
+                    break;
+                }
+
+                // Convert the read string to a integer
+                int byte = atoi(key);
+
+                // If the byte is an arrow key
+                if (byte == KEY_LEFT || byte == KEY_RIGHT || byte == KEY_UP || byte == KEY_DOWN)
+                {
+                    // Move the circle
+                    move_circle(byte);
+                    draw_circle();
+
+                    // Protect the shared memory with the semaphore
+                    if (sem_wait(sem_sh) == -1)
+                    {
+                        error = TRUE;
+                        break;
+                    }
+
+                    // Erase previous circle
+                    erase_bmp(bmp);
+
+                    // Draw the circle on the bitmap in the new position
+                    draw_bmp_circle(bmp, circle.x, circle.y);
+
+                    // Convert the bitmap to a matrix
+                    bmp_to_static(bmp, ptr);
+
+                    // Release the semaphore
+                    if (sem_post(sem_sh) == -1)
+                    {
+                        error = TRUE;
+                        break;
+                    }
+                }
+                // If the byte is the mouse key
+                else if (byte == KEY_MOUSE)
                 {
                     // Save the image as .bmp file
                     bmp_save(bmp, "out/image.bmp");
@@ -219,39 +366,92 @@ int main(int argc, char *argv[])
                 }
             }
         }
-
-        // If input is an arrow key, move circle accordingly...
-        else if (cmd == KEY_LEFT || cmd == KEY_RIGHT || cmd == KEY_UP || cmd == KEY_DOWN)
+        else
         {
-            move_circle(cmd);
-            draw_circle();
-
-            // Protect the shared memory with the semaphore
-            if (sem_wait(sem_sh) == -1)
+            // Else, if user presses print button...
+            if (cmd == KEY_MOUSE)
             {
-                error = TRUE;
-                break;
+                if (getmouse(&event) == OK)
+                {
+                    if (check_button_pressed(print_btn, &event))
+                    {
+                        // If the modality is client
+                        if (modality == 3)
+                        {
+                            // Send the print key
+                            sprintf(key, "%d", KEY_MOUSE);
+                            if (write(sockfd, &key, 4) < 0)
+                            {
+                                error = TRUE;
+                                break;
+                            }
+                        }
+
+                        // Save the image as .bmp file
+                        bmp_save(bmp, "out/image.bmp");
+
+                        // Print that the image was saved
+                        mvprintw(LINES - 1, 1, "Image saved succesfully!");
+                        refresh();
+                        sleep(1);
+                        for (int j = 0; j < COLS - BTN_SIZE_X - 2; j++)
+                        {
+                            mvaddch(LINES - 1, j, ' ');
+                        }
+                    }
+                }
             }
 
-            // Erase previous circle
-            erase_bmp(bmp);
-
-            // Draw the circle on the bitmap in the new position
-            draw_bmp_circle(bmp, circle.x, circle.y);
-
-            // Convert the bitmap to a matrix
-            bmp_to_static(bmp, ptr);
-
-            // Release the semaphore
-            if (sem_post(sem_sh) == -1)
+            // If input is an arrow key, move circle accordingly...
+            else if (cmd == KEY_LEFT || cmd == KEY_RIGHT || cmd == KEY_UP || cmd == KEY_DOWN)
             {
-                error = TRUE;
-                break;
+                move_circle(cmd);
+                draw_circle();
+
+                // If the modality is client
+                if (modality == 3)
+                {
+                    // Convert the arrow key to a string
+                    sprintf(key, "%d", cmd);
+
+                    // Send the byte to the server
+                    if (write(sockfd, key, 4) < 0)
+                    {
+                        error = TRUE;
+                        break;
+                    }
+                }
+
+                // Protect the shared memory with the semaphore
+                if (sem_wait(sem_sh) == -1)
+                {
+                    error = TRUE;
+                    break;
+                }
+
+                // Erase previous circle
+                erase_bmp(bmp);
+
+                // Draw the circle on the bitmap in the new position
+                draw_bmp_circle(bmp, circle.x, circle.y);
+
+                // Convert the bitmap to a matrix
+                bmp_to_static(bmp, ptr);
+
+                // Release the semaphore
+                if (sem_post(sem_sh) == -1)
+                {
+                    error = TRUE;
+                    break;
+                }
             }
         }
     }
 
 cleanup:
+
+    // Store the errno
+    int err_no = errno;
 
     // Free the bitmap
     bmp_destroy(bmp);
@@ -272,7 +472,8 @@ cleanup:
 
     if (error)
     {
-        exit(errno);
+        exit(err_no);
     }
+
     exit(0);
 }

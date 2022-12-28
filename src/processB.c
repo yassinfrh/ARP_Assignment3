@@ -207,6 +207,10 @@ int main(int argc, char const *argv[])
             refresh();
         }
     }
+
+    // Store the errno
+    int err_no = errno;
+
     // Free the bitmap
     bmp_destroy(bmp);
 
@@ -226,7 +230,7 @@ int main(int argc, char const *argv[])
 
     if (error)
     {
-        exit(errno);
+        exit(err_no);
     }
     exit(0);
 }
