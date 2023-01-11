@@ -185,12 +185,16 @@ int main()
 
   int status;
 
+  // Variable to check which child process terminated
+  int child_a = 0;
+
   while (1)
   {
     // If child process terminates unexpectedly, kill the other child process
     if (waitpid(pid_procA, &status, WNOHANG) != 0)
     {
       kill(pid_procB, SIGKILL);
+      child_a = 1;
       break;
     }
     else if (waitpid(pid_procB, &status, WNOHANG) != 0)
@@ -200,19 +204,16 @@ int main()
     }
   }
 
-  // Check the exit status of the child process
-  if (WEXITSTATUS(status) == 1)
+  // Check which child process terminated
+  if (child_a == 1)
   {
-    // If the status is 1, the child process exited because of a bitmap error
-    printf("Child process exited for bitmap error\n");
-    fflush(stdout);
+    printf("Process A terminated for an error.\n");
   }
-  else if (WEXITSTATUS(status) > 1)
+  else
   {
-    // If the status is greater than 1, the child process exited because of a system call error
-    printf("Child process exited for system call error: %s", strerror(WEXITSTATUS(status)));
-    fflush(stdout);
+    printf("Process B terminated for an error.\n");
   }
+  fflush(stdout);
 
   // Unlink the semaphore
   if (sem_unlink(SEM_PATH) == -1)
