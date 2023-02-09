@@ -22,6 +22,9 @@ const int width = 1600;
 const int height = 600;
 const int depth = 4;
 
+// Log file
+FILE *logFile;
+
 // Function to draw a circle of radius 30 on a bitmap centered in given coordinates
 void draw_bmp_circle(bmpfile_t *bmp, int x, int y)
 {
@@ -88,6 +91,14 @@ void bmp_to_static(bmpfile_t *bmp, rgb_pixel_t *matrix)
 
 int main(int argc, char *argv[])
 {
+    // Open the log file
+    logFile = fopen("log/processA.log", "w");
+
+    // Get the current time
+    time_t t = time(NULL);
+    char *timeString = ctime(&t);
+    timeString[strlen(timeString) - 1] = '\0';
+
     // Get the modality of the program from the arguments
     int modality = atoi(argv[1]);
 
@@ -99,7 +110,8 @@ int main(int argc, char *argv[])
 
     if (bmp == NULL)
     {
-        // If the bitmap is not created, exit
+        // If the bitmap is not created log and exit
+        fprintf(logFile, "%s - Error while creating bitmap\n", timeString);
         exit(1);
     }
 
@@ -115,6 +127,9 @@ int main(int argc, char *argv[])
     // Open the shared memory object
     if ((shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666)) == -1)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while opening shared memory object\n", timeString);
+
         // Destroy the bitmap
         bmp_destroy(bmp);
 
@@ -125,6 +140,8 @@ int main(int argc, char *argv[])
     // Configure the size of the shared memory object
     if (ftruncate(shm_fd, SHM_SIZE) == -1)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while configuring the size of the shared memory object\n", timeString);
         // Destroy the bitmap
         bmp_destroy(bmp);
         // Close the shared memory object
@@ -136,6 +153,8 @@ int main(int argc, char *argv[])
     rgb_pixel_t *ptr = (rgb_pixel_t *)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (ptr == MAP_FAILED)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while mapping the shared memory object into the address space of the process\n", timeString);
         // Destroy the bitmap
         bmp_destroy(bmp);
         // Close the shared memory object
@@ -159,6 +178,8 @@ int main(int argc, char *argv[])
     sem_t *sem_sh = sem_open(SEM_PATH, O_CREAT, S_IRUSR | S_IWUSR, 1);
     if (sem_sh == SEM_FAILED)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while initializing the semaphore\n", timeString);    
         // Destroy the bitmap
         bmp_destroy(bmp);
         // Unmap the shared memory object
@@ -174,6 +195,9 @@ int main(int argc, char *argv[])
     // Protect the shared memory with the semaphore
     if (sem_wait(sem_sh) == -1)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while locking the semaphore\n", timeString);
+
         error = TRUE;
         goto cleanup;
     }
@@ -184,6 +208,9 @@ int main(int argc, char *argv[])
     // Release the semaphore
     if (sem_post(sem_sh) == -1)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while unlocking the semaphore\n", timeString);
+
         error = TRUE;
         goto cleanup;
     }
@@ -193,13 +220,24 @@ int main(int argc, char *argv[])
     struct sockaddr_in serv_addr, cli_addr;
     struct hostent *server;
 
+    // Update the time
+    t = time(NULL);
+    timeString = ctime(&t);
+    timeString[strlen(timeString) - 1] = '\0';
+
     // If the modality is server
     if (modality == 2)
     {
+        // Log the event
+        fprintf(logFile, "%s - Server mode\n", timeString);
+
         // Create a socket
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0)
         {
+            // Log the error
+            fprintf(logFile, "%s - Error while creating the socket\n", timeString);
+
             error = TRUE;
             goto cleanup;
         }
@@ -214,6 +252,9 @@ int main(int argc, char *argv[])
         // Bind the host address
         if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         {
+            // Log the error
+            fprintf(logFile, "%s - Error while binding the host address\n", timeString);
+
             error = TRUE;
             goto cleanup;
         }
@@ -222,21 +263,46 @@ int main(int argc, char *argv[])
         listen(sockfd, 5);
         clilen = sizeof(cli_addr);
 
+        // Update the time
+        t = time(NULL);
+        timeString = ctime(&t);
+        timeString[strlen(timeString) - 1] = '\0';
+
+        // Log the event
+        fprintf(logFile, "%s - Waiting for client connection\n", timeString);
+
         // Accept connection from the client
         newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
         if (newsockfd < 0)
         {
+            // Log the error
+            fprintf(logFile, "%s - Error while accepting connection from the client\n", timeString);
+
             error = TRUE;
             goto cleanup;
         }
+
+        // Update the time
+        t = time(NULL);
+        timeString = ctime(&t);
+        timeString[strlen(timeString) - 1] = '\0';
+
+        // Log the event
+        fprintf(logFile, "%s - Client connected\n", timeString);
     }
     // If modality is client
     else if (modality == 3)
     {
+        // Log the event
+        fprintf(logFile, "%s - Client mode\n", timeString);
+
         // Create a socket
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0)
         {
+            // Log the error
+            fprintf(logFile, "%s - Error while creating the socket\n", timeString);
+
             error = TRUE;
             goto cleanup;
         }
@@ -245,6 +311,9 @@ int main(int argc, char *argv[])
         server = gethostbyname(argv[3]);
         if (server == NULL)
         {
+            // Log the error
+            fprintf(logFile, "%s - Error while getting the host name\n", timeString);
+
             error = TRUE;
             goto cleanup;
         }
@@ -256,12 +325,31 @@ int main(int argc, char *argv[])
         bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
         serv_addr.sin_port = htons(portno);
 
+        // Update the time
+        t = time(NULL);
+        timeString = ctime(&t);
+        timeString[strlen(timeString) - 1] = '\0';
+
+        // Log the event
+        fprintf(logFile, "%s - Connecting to the server\n", timeString);
+
         // Connect to the server
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         {
+            // Log the error
+            fprintf(logFile, "%s - Error while connecting to the server\n", timeString);
+
             error = TRUE;
             goto cleanup;
         }
+
+        // Update the time
+        t = time(NULL);
+        timeString = ctime(&t);
+        timeString[strlen(timeString) - 1] = '\0';
+
+        // Log the event
+        fprintf(logFile, "%s - Connected to the server", timeString);
     }
 
     // Variable to store the key to send or received
@@ -270,6 +358,13 @@ int main(int argc, char *argv[])
     // Infinite loop
     while (TRUE)
     {
+        // Update the time
+        t = time(NULL);
+        timeString = ctime(&t);
+        timeString[strlen(timeString) - 1] = '\0';
+
+        mvprintw(LINES - 1, 1, "Press q to quit");
+
         // Get input in non-blocking mode
         int cmd = getch();
 
@@ -286,6 +381,14 @@ int main(int argc, char *argv[])
             }
         }
 
+        // If the user pressed q, exit
+        if (cmd == 'q'){
+            // Log the event
+            fprintf(logFile, "%s - Quitting\n", timeString);
+
+            break;
+        }
+
         // If the modality is server
         if (modality == 2)
         {
@@ -300,8 +403,11 @@ int main(int argc, char *argv[])
             int ready = select(maxfd, &readfds, NULL, NULL, &timeout);
 
             // If error occurred
-            if (ready == -1)
+            if (ready == -1 && errno != EINTR)
             {
+                // Log the error
+                fprintf(logFile, "%s - Error while waiting for the client input\n", timeString);
+
                 error = TRUE;
                 break;
             }
@@ -311,6 +417,9 @@ int main(int argc, char *argv[])
                 // Read the byte
                 if (read(newsockfd, &key, 4) < 0)
                 {
+                    // Log the error
+                    fprintf(logFile, "%s - Error while reading the client input\n", timeString);
+
                     error = TRUE;
                     break;
                 }
@@ -321,6 +430,14 @@ int main(int argc, char *argv[])
                 // If the byte is an arrow key
                 if (byte == KEY_LEFT || byte == KEY_RIGHT || byte == KEY_UP || byte == KEY_DOWN)
                 {
+                    // Update the time
+                    t = time(NULL);
+                    timeString = ctime(&t);
+                    timeString[strlen(timeString) - 1] = '\0';
+
+                    // Log the event
+                    fprintf(logFile, "%s - Received arrow key\n", timeString);
+
                     // Move the circle
                     move_circle(byte);
                     draw_circle();
@@ -328,6 +445,9 @@ int main(int argc, char *argv[])
                     // Protect the shared memory with the semaphore
                     if (sem_wait(sem_sh) == -1)
                     {
+                        // Log the error
+                        fprintf(logFile, "%s - Error while taking the semaphore\n", timeString);
+
                         error = TRUE;
                         break;
                     }
@@ -344,6 +464,9 @@ int main(int argc, char *argv[])
                     // Release the semaphore
                     if (sem_post(sem_sh) == -1)
                     {
+                        // Log the error
+                        fprintf(logFile, "%s - Error while releasing the semaphore\n", timeString);
+
                         error = TRUE;
                         break;
                     }
@@ -351,6 +474,11 @@ int main(int argc, char *argv[])
                 // If the byte is the mouse key
                 else if (byte == KEY_MOUSE)
                 {
+                    // Update the time
+                    t = time(NULL);
+                    timeString = ctime(&t);
+                    timeString[strlen(timeString) - 1] = '\0';
+
                     // Save the image as .bmp file
                     bmp_save(bmp, "out/image.bmp");
 
@@ -362,6 +490,9 @@ int main(int argc, char *argv[])
                     {
                         mvaddch(LINES - 1, j, ' ');
                     }
+
+                    // Log the event
+                    fprintf(logFile, "%s - Picture saved\n", timeString);
                 }
             }
         }
@@ -381,9 +512,15 @@ int main(int argc, char *argv[])
                             sprintf(key, "%d", KEY_MOUSE);
                             if (write(sockfd, &key, 4) < 0)
                             {
+                                // Log the error
+                                fprintf(logFile, "%s - Error while sending the print key\n", timeString);
+
                                 error = TRUE;
                                 break;
                             }
+
+                            // Log the event
+                            fprintf(logFile, "%s - Print command sent\n", timeString);
                         }
 
                         // Save the image as .bmp file
@@ -397,6 +534,14 @@ int main(int argc, char *argv[])
                         {
                             mvaddch(LINES - 1, j, ' ');
                         }
+
+                        // Update the time
+                        t = time(NULL);
+                        timeString = ctime(&t);
+                        timeString[strlen(timeString) - 1] = '\0';
+
+                        // Log the event
+                        fprintf(logFile, "%s - Picture saved\n", timeString);
                     }
                 }
             }
@@ -404,6 +549,11 @@ int main(int argc, char *argv[])
             // If input is an arrow key, move circle accordingly...
             else if (cmd == KEY_LEFT || cmd == KEY_RIGHT || cmd == KEY_UP || cmd == KEY_DOWN)
             {
+                // Update the time
+                t = time(NULL);
+                timeString = ctime(&t);
+                timeString[strlen(timeString) - 1] = '\0';
+
                 move_circle(cmd);
                 draw_circle();
 
@@ -416,6 +566,9 @@ int main(int argc, char *argv[])
                     // Send the byte to the server
                     if (write(sockfd, key, 4) < 0)
                     {
+                        // Log the error
+                        fprintf(logFile, "%s - Error while sending the arrow key\n", timeString);
+
                         error = TRUE;
                         break;
                     }
@@ -424,6 +577,8 @@ int main(int argc, char *argv[])
                 // Protect the shared memory with the semaphore
                 if (sem_wait(sem_sh) == -1)
                 {
+                    // Log the error
+                    fprintf(logFile, "%s - Error while taking the semaphore\n", timeString);
                     error = TRUE;
                     break;
                 }
@@ -440,6 +595,9 @@ int main(int argc, char *argv[])
                 // Release the semaphore
                 if (sem_post(sem_sh) == -1)
                 {
+                    // Log the error
+                    fprintf(logFile, "%s - Error while releasing the semaphore\n", timeString);
+
                     error = TRUE;
                     break;
                 }
@@ -458,12 +616,18 @@ cleanup:
     // Unmap the shared memory object
     if (munmap(ptr, SHM_SIZE) == -1)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while unmapping the shared memory\n", timeString);
+
         exit(errno);
     }
 
     // Close the shared memory object
     if (shm_unlink(shm_name) == -1)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while closing the shared memory\n", timeString);
+
         exit(errno);
     }
 

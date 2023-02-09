@@ -13,6 +13,9 @@ const int width = 1600;
 const int height = 600;
 const int depth = 4;
 
+// Log file
+FILE *logFile;
+
 // Function to erase all the bitmap
 void erase_bmp(bmpfile_t *bmp)
 {
@@ -92,6 +95,14 @@ void find_center(bmpfile_t *bmp, int *x, int *y)
 
 int main(int argc, char const *argv[])
 {
+    // Open the log file
+    logFile = fopen("log/processB.log", "w");
+
+    // Get the current time
+    time_t t = time(NULL);
+    char *timeString = ctime(&t);
+    timeString[strlen(timeString) - 1] = '\0';
+
     // Data structure for storing the bitmap file
     bmpfile_t *bmp;
 
@@ -100,7 +111,9 @@ int main(int argc, char const *argv[])
 
     if (bmp == NULL)
     {
-        // If the bitmap is not created, exit
+        // If the bitmap is not created, log and exit
+        fprintf(logFile, "%s - Error while creating bitmap\n", timeString);
+
         exit(1);
     }
 
@@ -116,6 +129,9 @@ int main(int argc, char const *argv[])
     // Open the shared memory object
     if ((shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666)) == -1)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while opening shared memory object\n", timeString);
+
         // Destroy the bitmap
         bmp_destroy(bmp);
 
@@ -127,6 +143,8 @@ int main(int argc, char const *argv[])
     rgb_pixel_t *ptr = (rgb_pixel_t *)mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (ptr == MAP_FAILED)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while mapping shared memory object\n", timeString);
         // Destroy the bitmap
         bmp_destroy(bmp);
         // Close the shared memory object
@@ -147,6 +165,8 @@ int main(int argc, char const *argv[])
     sem_t *sem_sh = sem_open(SEM_PATH, O_CREAT, S_IRUSR | S_IWUSR, 1);
     if (sem_sh == SEM_FAILED)
     {
+        // Log the error
+        fprintf(logFile, "%s - Error while opening semaphore\n", timeString);
         // Destroy the bitmap
         bmp_destroy(bmp);
         // Unmap the shared memory object
@@ -161,6 +181,10 @@ int main(int argc, char const *argv[])
     // Infinite loop
     while (TRUE)
     {
+        // Update the current time
+        t = time(NULL);
+        timeString = ctime(&t);
+        timeString[strlen(timeString) - 1] = '\0';
 
         // Get input in non-blocking mode
         int cmd = getch();
@@ -183,6 +207,8 @@ int main(int argc, char const *argv[])
             // Protect the shared memory with a semaphore
             if (sem_wait(sem_sh) == -1)
             {
+                // Log the error
+                fprintf(logFile, "%s - Error while taking the semaphore\n", timeString);
                 error = TRUE;
                 break;
             }
@@ -196,6 +222,9 @@ int main(int argc, char const *argv[])
             // Release the semaphore
             if (sem_post(sem_sh) == -1)
             {
+                // Log the error
+                fprintf(logFile, "%s - Error while releasing the semaphore\n", timeString);
+                
                 error = TRUE;
                 break;
             }
