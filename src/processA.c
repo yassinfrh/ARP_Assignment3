@@ -92,7 +92,7 @@ void bmp_to_static(bmpfile_t *bmp, rgb_pixel_t *matrix)
 int main(int argc, char *argv[])
 {
     // Open the log file
-    logFile = fopen("log/processA.log", "w");
+    logFile = fopen("log/processA.log", "a");
 
     // Get the current time
     time_t t = time(NULL);
@@ -349,7 +349,7 @@ int main(int argc, char *argv[])
         timeString[strlen(timeString) - 1] = '\0';
 
         // Log the event
-        fprintf(logFile, "%s - Connected to the server", timeString);
+        fprintf(logFile, "%s - Connected to the server\n", timeString);
     }
 
     // Variable to store the key to send or received

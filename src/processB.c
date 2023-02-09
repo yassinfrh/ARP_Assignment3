@@ -96,7 +96,7 @@ void find_center(bmpfile_t *bmp, int *x, int *y)
 int main(int argc, char const *argv[])
 {
     // Open the log file
-    logFile = fopen("log/processB.log", "w");
+    logFile = fopen("log/processB.log", "a");
 
     // Get the current time
     time_t t = time(NULL);
@@ -224,7 +224,7 @@ int main(int argc, char const *argv[])
             {
                 // Log the error
                 fprintf(logFile, "%s - Error while releasing the semaphore\n", timeString);
-                
+
                 error = TRUE;
                 break;
             }

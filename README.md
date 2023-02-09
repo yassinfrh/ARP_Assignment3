@@ -13,6 +13,7 @@ After compiling the program other two directories will be created:
 
 - the `bin` folder contains all the executable files
 - the `out` folder will contain the saved image as a *bmp* file
+- the `log` folder will contain the log files of processA and processB
 
 ## Processes
 The program is composed of 3 processes:
@@ -57,6 +58,7 @@ After running the code, the user will be asked in which modality to launch the p
     1. Normal
     2. Server
     3. Client
+    4. Exit
 
 Insert the number to choose the modality. In case you choose to run the program in **client** mode, you'll be asked to write the IP address of the server and the port number to use
 
@@ -68,4 +70,9 @@ Insert the number to choose the modality. In case you choose to run the program 
 
 If you choose to run the program in **server** mode, you'll be asked just for the port number.
 
-To work properly, the window related to `processA.c` needs to be 90x30 and the window related to `processB.c` needs to be 80x30.
+To work properly, the window related to `processA.c` needs to be 90x30 and the window related to `processB.c` needs to be 80x30 (in case of server mode, resize the window after the client is connected, to avoid errors).
+
+During the execution of the program, if inside of `processA.c` you press **q**, the program will exit and go back to the main menu. It will go back to the main menu also in case of errors.
+
+## Log files
+Inside the `log` folder, you'll find two log files, `processA.log` and `processB.log`. In case of unexpected behavior of the program, check the log files to read what's gone wrong.
